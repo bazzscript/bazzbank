@@ -25,7 +25,7 @@ app.all("/",  (req: Request, res: Response, next: NextFunction) => {
       status: "success",
       message: `Welcome To The BAZZ BANK ${process.env.NODE_ENV} API`,
       data: {
-        docs: ""
+        docs: "https://documenter.getpostman.com/view/15534491/UzJHRdqe"
       }
      });
   });
