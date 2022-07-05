@@ -158,18 +158,17 @@ class WalletController {
                         });
 
                     }
-
-
                 );
-
-
-
-
 
             } catch (error) {
                 // If the execution reaches this line, an error was thrown.
                 // We rollback the transaction.
                 await t.rollback();
+                res.status(status_codes.BAD_REQUEST).json({
+                    status: 'error',
+                    message: 'Error With Transaction, Please Try Again',
+                    data: {}
+                });
             }
 
         } catch (error) {
@@ -214,7 +213,7 @@ class WalletController {
                 var transaction: TransactionT;
                 try {
                     transaction = await Transaction.findOne({ where: { trsf: trsf }, transaction: t }) as TransactionT;
-                    
+
                 } catch (error) {
                     return res.status(status_codes.NOT_FOUND).json({
                         status: 'error',
@@ -239,9 +238,7 @@ class WalletController {
                         data: {}
                     });
                 }
-
-                console.log('TRANSACTION TYPE IS ' + type);
-
+                // Verify Transaction
                 paystackServices.verifyTransaction(
                     trsf,
                     type,
@@ -338,8 +335,6 @@ class WalletController {
                                 wallet: updatedWallet,
                             }
                         });
-
-
                     }
                 );
 
@@ -355,8 +350,6 @@ class WalletController {
                 });
             }
 
-
-
         } catch (error) {
             res.status(status_codes.INTERNAL_SERVER_ERROR).json({
                 status: 'error',
@@ -367,39 +360,40 @@ class WalletController {
 
     }
 
-        // TRANSACTION HISTORY
-     async transactionHistory(req: Request, res: Response) {
+    // TRANSACTION HISTORY
+    async transactionHistory(req: Request, res: Response) {
 
-            const errors = validationResult(req);
-            if (!errors.isEmpty()) {
-                return res.status(status_codes.BAD_REQUEST).json({
-                    status: 'error',
-                    message: errors.array(),
-                    data: {}
-                });
-            }
-            const user = await req.body.user;
-    
-            try {
-                const transactions = await Transaction.findAll({ where: { userId: user.id } }) as TransactionT;
-                res.status(status_codes.OK).json({
-                    status: 'success',
-                    message: 'Transaction History',
-                    data: {
-                        transactions: transactions
-                    }});
-    
-            }
-            catch (error) {
-                res.status(status_codes.INTERNAL_SERVER_ERROR).json({
-                    status: 'error',
-                    message: 'Internal Server Error',
-                    data: {}
-                });
-            }
-             }
-    
-     // TRANSFER / SEND MONEY FROM ONE WALLET TO ANOTHER USER(WALLET), USIGN JUST THIER EMAIL
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(status_codes.BAD_REQUEST).json({
+                status: 'error',
+                message: errors.array(),
+                data: {}
+            });
+        }
+        const user = await req.body.user;
+
+        try {
+            const transactions = await Transaction.findAll({ where: { userId: user.id } }) as TransactionT;
+            res.status(status_codes.OK).json({
+                status: 'success',
+                message: 'Transaction History',
+                data: {
+                    transactions: transactions
+                }
+            });
+
+        }
+        catch (error) {
+            res.status(status_codes.INTERNAL_SERVER_ERROR).json({
+                status: 'error',
+                message: 'Internal Server Error',
+                data: {}
+            });
+        }
+    }
+
+    // TRANSFER / SEND MONEY FROM ONE WALLET TO ANOTHER USER(WALLET), USIGN JUST THIER EMAIL
     async transferMoney(req: Request, res: Response) {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -412,7 +406,7 @@ class WalletController {
         const user = await req.body.user;
         const amountToSend: number = req.body.amount as number;
         const receiverEmail: string = req.body.reciever_email as string;
-        if(amountToSend < 50){
+        if (amountToSend < 50) {
             return res.status(status_codes.BAD_REQUEST).json({
                 status: 'error',
                 message: 'Minimum Transfer Amount is NGN50',
@@ -427,80 +421,76 @@ class WalletController {
             trsf1.toString();
             trsf2.toString();
 
-            console.log('Trabsaction reference 1: ' + trsf1);
-            console.log('Trabsaction reference 2: ' + trsf2);
-
-
             // Start Transaction
             const t = await sequelize.transaction();
             try {
                 // retrieve sender wallet
                 // Retrieve Recievers Wallet From Email
                 var receiver: UserT;
-                receiver = await User.findOne({ where: { email: receiverEmail }, transaction:t }) as UserT;
-                if(!receiver){
+                receiver = await User.findOne({ where: { email: receiverEmail }, transaction: t }) as UserT;
+                if (!receiver) {
                     res.status(status_codes.BAD_REQUEST).json({
                         status: 'error',
                         message: 'Receiver Email Not Found',
                         data: {}
                     });
                 };
-                const receiverWallet = await Wallet.findOne({ where: { userId: receiver.id }, transaction: t }) as WalletT;  
+                const receiverWallet = await Wallet.findOne({ where: { userId: receiver.id }, transaction: t }) as WalletT;
                 const senderWallet = await Wallet.findOne({ where: { userId: user.id }, transaction: t }) as WalletT;
 
                 // Confirm Sender Has Enough Balance To Send
-                if(senderWallet.withdrawable_balance as number < amountToSend){
+                if (senderWallet.withdrawable_balance as number < amountToSend) {
                     return res.status(status_codes.BAD_REQUEST).json({
                         status: 'error',
                         message: 'Insufficient Funds',
                         data: {}
                     });
                 }
-                
-                            // Create Transaction
-            const senderTransaction = await Transaction.create({
-                userId: user.id,
-                type: 'transfer',
-                status: 'completed',
-                amount: amountToSend,
-                trsf: trsf1,
-                description:`Transfer to ${receiverEmail}`
-            }, { transaction: t }) as TransactionT;
-            // Create Transaction
-            const recieverTransaction = await Transaction.create({
-                userId: receiver.id,
-                type: 'transfer',
-                status: 'completed',
-                amount: amountToSend,
-                trsf: trsf2,
-                description: `Transfer From ${user.email}`
-            }, { transaction: t }) as TransactionT;
 
-            // Update Sender Wallet
-            await Wallet.update({
-                withdrawable_balance: senderWallet.withdrawable_balance as number - amountToSend
-            }, {
-                where: { userId: user.id },
-                transaction: t
-            }) as WalletT;
+                // Create Transaction
+                const senderTransaction = await Transaction.create({
+                    userId: user.id,
+                    type: 'transfer',
+                    status: 'completed',
+                    amount: amountToSend,
+                    trsf: trsf1,
+                    description: `Transfer to ${receiverEmail}`
+                }, { transaction: t }) as TransactionT;
+                // Create Transaction
+                const recieverTransaction = await Transaction.create({
+                    userId: receiver.id,
+                    type: 'transfer',
+                    status: 'completed',
+                    amount: amountToSend,
+                    trsf: trsf2,
+                    description: `Transfer From ${user.email}`
+                }, { transaction: t }) as TransactionT;
 
-
-            // Update Reciever Wallet
-            await Wallet.update({
-                withdrawable_balance: receiverWallet.withdrawable_balance as number + amountToSend
-            }, {
-                where: { userId: receiver.id },
-                transaction: t
-            }) as WalletT;
+                // Update Sender Wallet
+                await Wallet.update({
+                    withdrawable_balance: senderWallet.withdrawable_balance as number - amountToSend
+                }, {
+                    where: { userId: user.id },
+                    transaction: t
+                }) as WalletT;
 
 
-            // Commit Transaction
-            await t.commit();
-            res.status(status_codes.OK).json({
-                status: 'success',
-                message:   `${amountToSend} NGN successfully transferred to ${receiverEmail}`,
-            });
-                
+                // Update Reciever Wallet
+                await Wallet.update({
+                    withdrawable_balance: receiverWallet.withdrawable_balance as number + amountToSend
+                }, {
+                    where: { userId: receiver.id },
+                    transaction: t
+                }) as WalletT;
+
+
+                // Commit Transaction
+                await t.commit();
+                res.status(status_codes.OK).json({
+                    status: 'success',
+                    message: `${amountToSend} NGN successfully transferred to ${receiverEmail}`,
+                });
+
             } catch (error) {
                 // If the execution reaches this line, an error was thrown.
                 // We rollback the transaction.
@@ -521,30 +511,7 @@ class WalletController {
             });
         }
     }
-
-    
-    // WITHDRAW MONEY FROM WALLET
-    // async withdrawFromWallet(req: Request, res: Response) {
-    //     const errors = validationResult(req);
-    //     if (!errors.isEmpty()) {
-    //         return res.status(status_codes.BAD_REQUEST).json({
-    //             status: 'error',
-    //             message: errors.array(),
-    //             data: {}
-    //         });
-    //     }
-    //     return undefined;
-    // }
-
-
-
-
-
 }
 
 
 export default WalletController;
-function uuidv4(): any {
-    throw new Error("Function not implemented.");
-}
-
