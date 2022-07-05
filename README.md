@@ -1,4 +1,4 @@
-To Run The Project, Run:
+To Run This Project, Run This Command:
 $npm start
 
 Bank Documentation On PostMan:
